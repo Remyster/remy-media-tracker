@@ -225,8 +225,13 @@ main { padding: 1.2rem; }
 .b-movie { background: #0d1a33; color: #4b8be8; }
 .b-tv    { background: #0d2218; color: #4be88a; }
 
-/* progress */
-.prog-wrap { margin-bottom: 0.5rem; }
+.ep-info {
+  font-size: 0.68rem; font-weight: 600;
+  padding: 0.2rem 0.45rem; border-radius: 5px;
+  margin-bottom: 0.4rem; display: inline-block;
+}
+.ep-info.new      { background: rgba(75,232,138,0.15); color: var(--green); }
+.ep-info.upcoming { background: rgba(232,176,75,0.12); color: var(--gold); }
 .prog-bar { height: 3px; background: var(--s3); border-radius: 2px; overflow: hidden; }
 .prog-fill { height: 100%; background: var(--gold); border-radius: 2px; transition: width 0.4s; }
 .prog-txt { font-size: 0.63rem; color: var(--dim); margin-top: 0.2rem; }
@@ -250,6 +255,22 @@ main { padding: 1.2rem; }
 .act.full { width: 100%; flex: none; }
 .act.eps { color: var(--dim); font-size: 0.68rem; }
 .act.eps:hover { color: var(--purple); border-color: var(--purple); }
+
+/* episode info strip */
+.ep-info {
+  font-size: 0.68rem; font-weight: 600;
+  padding: 0.25rem 0.45rem;
+  border-radius: 5px;
+  margin-bottom: 0.4rem;
+  display: inline-block;
+}
+.ep-info.upcoming { background: #1a1a2e; color: #7b8fe8; }
+.ep-info.new      { background: #1a2e1a; color: #4be88a; animation: pulse 2s infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
 
 /* === EMPTY === */
 .empty {
@@ -521,14 +542,42 @@ async function loadTVInfo(id) {
     item.totalSeasons = j.number_of_seasons || 1;
     item.totalEpsAll  = j.number_of_episodes || 0;
     item.totalEps     = {};
+    item.lastRefresh  = Date.now();
 
     (j.seasons || []).forEach(s => {
       if (s.season_number > 0) item.totalEps[s.season_number] = s.episode_count;
     });
 
+    // Volgende aflevering
+    if (j.next_episode_to_air) {
+      const ne = j.next_episode_to_air;
+      item.nextEp = { season: ne.season_number, episode: ne.episode_number, name: ne.name, airDate: ne.air_date };
+    } else {
+      item.nextEp = null;
+    }
+
+    // Laatste aflevering voor "nieuw!" badge
+    if (j.last_episode_to_air) {
+      const le = j.last_episode_to_air;
+      item.lastEp = { season: le.season_number, episode: le.episode_number, name: le.name, airDate: le.air_date };
+    } else {
+      item.lastEp = null;
+    }
+
     save();
     renderGrid();
   } catch {}
+}
+
+// Refresh alle TV series bij opstarten (max 1x per 12 uur)
+async function refreshAllTV() {
+  const tvItems = db.items.filter(x => x.type === 'tv');
+  const now = Date.now();
+  for (const item of tvItems) {
+    if (!item.lastRefresh || now - item.lastRefresh > 12 * 60 * 60 * 1000) {
+      await loadTVInfo(item.id);
+    }
+  }
 }
 
 // ─── TABS ─────────────────────────────────────────────────
@@ -574,6 +623,23 @@ function buildCard(item) {
     ? `<span class="badge-type b-movie">Film</span>`
     : `<span class="badge-type b-tv">Serie</span>`;
 
+  // Volgende / nieuwste aflevering badge
+  let epInfo = '';
+  if (item.type === 'tv') {
+    const today = new Date().toISOString().slice(0, 10);
+    if (item.nextEp) {
+      const d = new Date(item.nextEp.airDate);
+      const label = d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+      epInfo = `<div class="ep-info upcoming">⏳ S${item.nextEp.season}E${item.nextEp.episode} · ${label}</div>`;
+    } else if (item.lastEp) {
+      const daysDiff = Math.floor((new Date(today) - new Date(item.lastEp.airDate)) / 86400000);
+      if (daysDiff >= 0 && daysDiff <= 14) {
+        const d = new Date(item.lastEp.airDate);
+        const label = d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+        epInfo = `<div class="ep-info new">🆕 S${item.lastEp.season}E${item.lastEp.episode} · ${label}</div>`;
+      }
+    }
+  }
   // Episode progress for TV
   let prog = '';
   if (item.type === 'tv' && item.totalEpsAll) {
@@ -620,6 +686,7 @@ function buildCard(item) {
       <div class="card-body">
         <div class="card-title">${item.title}</div>
         <div class="card-meta">${typeB}${item.year ? ' · ' + item.year : ''}</div>
+        ${epInfo}
         ${prog}
         <div class="card-actions">
           ${acts}
@@ -736,6 +803,7 @@ function closeModal() {
 // ─── INIT ─────────────────────────────────────────────────
 renderGrid();
 updateBadges();
+refreshAllTV();
 
 // ─── SERVICE WORKER ───────────────────────────────────────
 if ('serviceWorker' in navigator) {
