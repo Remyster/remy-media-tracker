@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Media Vault</title>
+<meta name="theme-color" content="#e8b04b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Media Vault">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23111'/><text y='.9em' font-size='72' x='50%25' dominant-baseline='middle' text-anchor='middle'>🎬</text></svg>">
+<link rel="manifest" href="./manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080808;
+  --s1: #111111;
+  --s2: #181818;
+  --s3: #222222;
+  --border: #2a2a2a;
+  --gold: #e8b04b;
+  --gold2: #c49a3f;
+  --text: #eeeeee;
+  --dim: #777777;
+  --red: #e84b4b;
+  --green: #4be88a;
+  --purple: #b04be8;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  /* subtle noise texture */
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* === HEADER === */
+header {
+  background: rgba(8,8,8,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0.9rem 1.2rem 0;
+  position: sticky; top: 0; z-index: 100;
+}
+
+.header-row {
+  display: flex; align-items: center; gap: 0.9rem; margin-bottom: 0.9rem;
+}
+
+.logo {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.6rem;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  white-space: nowrap;
+  line-height: 1;
+}
+.logo span { color: var(--dim); font-size: 0.8em; }
+
+.search-wrap { flex: 1; position: relative; }
+
+#searchInput {
+  width: 100%;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.6rem 1rem 0.6rem 2.4rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: 'DM Sans', sans-serif;
+}
+#searchInput:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(232,176,75,0.1);
+}
+#searchInput::placeholder { color: var(--dim); }
+
+.search-icon {
+  position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%);
+  color: var(--dim); font-size: 0.85rem; pointer-events: none;
+}
+
+/* dropdown */
+#searchResults {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 380px;
+  overflow-y: auto;
+  z-index: 200;
+  display: none;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+
+.sr-item {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  cursor: default;
+  transition: background 0.15s;
+}
+.sr-item:last-child { border-bottom: none; }
+.sr-item:hover { background: var(--s2); }
+
+.sr-poster {
+  width: 34px; height: 50px;
+  border-radius: 4px; object-fit: cover;
+  background: var(--s3); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+}
+.sr-poster img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
+
+.sr-info { flex: 1; min-width: 0; }
+.sr-title { font-size: 0.85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-meta { font-size: 0.72rem; color: var(--dim); margin-top: 0.1rem; }
+
+.sr-add {
+  padding: 0.3rem 0.7rem;
+  background: var(--gold); color: #000;
+  border: none; border-radius: 6px;
+  font-size: 0.78rem; font-weight: 700;
+  cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s, opacity 0.15s;
+  font-family: 'DM Sans', sans-serif;
+}
+.sr-add:hover { background: var(--gold2); }
+.sr-add:disabled { opacity: 0.4; cursor: default; background: var(--s3); color: var(--dim); }
+
+.sr-empty { padding: 1rem; text-align: center; color: var(--dim); font-size: 0.85rem; }
+
+/* === TABS === */
+.tabs { display: flex; gap: 0.15rem; }
+
+.tab {
+  padding: 0.55rem 0.9rem 0.6rem;
+  background: none; border: none;
+  color: var(--dim); font-size: 0.82rem; font-weight: 500;
+  cursor: pointer; border-radius: 8px 8px 0 0;
+  transition: all 0.2s;
+  display: flex; align-items: center; gap: 0.35rem;
+  font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  background: rgba(232,176,75,0.06);
+}
+
+.badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  background: var(--s3); color: var(--dim);
+  border-radius: 9px; font-size: 0.68rem; font-weight: 700;
+  transition: all 0.2s;
+}
+.tab.active .badge { background: var(--gold); color: #000; }
+
+/* === MAIN === */
+main { padding: 1.2rem; }
+
+.section-label {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1rem; letter-spacing: 0.1em;
+  color: var(--dim); margin-bottom: 1rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.85rem;
+}
+
+/* === CARDS === */
+.card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  display: flex; flex-direction: column;
+}
+.card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(232,176,75,0.4);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+}
+
+.card-img {
+  width: 100%; aspect-ratio: 2/3; overflow: hidden;
+  position: relative; background: var(--s2);
+  display: flex; align-items: center; justify-content: center;
+}
+.card-img img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform 0.3s;
+}
+.card:hover .card-img img { transform: scale(1.03); }
+
+.no-poster { font-size: 2.5rem; color: var(--s3); }
+
+.card-body { padding: 0.6rem; flex: 1; display: flex; flex-direction: column; }
+
+.card-title {
+  font-size: 0.82rem; font-weight: 600; line-height: 1.3;
+  margin-bottom: 0.3rem;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.card-meta { font-size: 0.68rem; color: var(--dim); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+
+.badge-type {
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em;
+  padding: 0.1rem 0.35rem; border-radius: 3px; text-transform: uppercase;
+}
+.b-movie { background: #0d1a33; color: #4b8be8; }
+.b-tv    { background: #0d2218; color: #4be88a; }
+
+/* progress */
+.prog-wrap { margin-bottom: 0.5rem; }
+.prog-bar { height: 3px; background: var(--s3); border-radius: 2px; overflow: hidden; }
+.prog-fill { height: 100%; background: var(--gold); border-radius: 2px; transition: width 0.4s; }
+.prog-txt { font-size: 0.63rem; color: var(--dim); margin-top: 0.2rem; }
+
+/* actions */
+.card-actions { margin-top: auto; display: flex; flex-direction: column; gap: 0.3rem; }
+
+.act-row { display: flex; gap: 0.3rem; }
+
+.act {
+  flex: 1; padding: 0.35rem 0.3rem;
+  background: var(--s2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px;
+  font-size: 0.7rem; cursor: pointer;
+  transition: all 0.15s; text-align: center;
+  font-family: 'DM Sans', sans-serif; font-weight: 500;
+  white-space: nowrap;
+}
+.act:hover { border-color: var(--gold); color: var(--gold); }
+.act.danger:hover { border-color: var(--red); color: var(--red); }
+.act.full { width: 100%; flex: none; }
+.act.eps { color: var(--dim); font-size: 0.68rem; }
+.act.eps:hover { color: var(--purple); border-color: var(--purple); }
+
+/* === EMPTY === */
+.empty {
+  grid-column: 1 / -1;
+  text-align: center; padding: 4rem 1rem;
+  color: var(--dim);
+}
+.empty-ico { font-size: 3rem; margin-bottom: 0.75rem; }
+.empty h3 { font-size: 1rem; margin-bottom: 0.4rem; color: var(--text); }
+.empty p { font-size: 0.85rem; }
+
+/* === MODAL === */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.88);
+  z-index: 300;
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s;
+}
+.overlay.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 18px 18px 0 0;
+  padding: 1.4rem 1.2rem 1.2rem;
+  width: 100%; max-width: 480px;
+  max-height: 82vh; overflow-y: auto;
+  transform: translateY(20px);
+  transition: transform 0.25s;
+}
+.overlay.open .modal { transform: translateY(0); }
+
+.modal-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.3rem; letter-spacing: 0.06em;
+  color: var(--gold); margin-bottom: 1rem;
+}
+
+.season-block { margin-bottom: 1.2rem; }
+
+.season-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.season-hdr span { font-size: 0.85rem; font-weight: 600; }
+.season-hdr small { color: var(--dim); font-weight: 400; }
+
+.mark-all {
+  font-size: 0.7rem; padding: 0.2rem 0.55rem;
+  background: var(--s2); border: 1px solid var(--border);
+  color: var(--dim); border-radius: 5px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+}
+.mark-all:hover { border-color: var(--gold); color: var(--gold); }
+
+.ep-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 0.3rem; }
+
+.ep {
+  aspect-ratio: 1; border: 1px solid var(--border);
+  background: var(--s2); color: var(--dim);
+  border-radius: 6px; font-size: 0.72rem;
+  cursor: pointer; transition: all 0.15s;
+  font-family: 'DM Sans', sans-serif; font-weight: 500;
+}
+.ep:hover { border-color: var(--gold); color: var(--gold); }
+.ep.done { background: var(--gold); border-color: var(--gold); color: #000; font-weight: 700; }
+
+.modal-close {
+  display: block; width: 100%;
+  padding: 0.75rem; background: var(--s2);
+  border: 1px solid var(--border); color: var(--text);
+  border-radius: 10px; font-size: 0.9rem; cursor: pointer;
+  margin-top: 1rem; font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+}
+.modal-close:hover { border-color: var(--dim); }
+
+/* === TOAST === */
+.toast {
+  position: fixed; bottom: 1.5rem; left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: var(--gold); color: #000;
+  padding: 0.55rem 1.2rem; border-radius: 20px;
+  font-size: 0.82rem; font-weight: 700;
+  z-index: 500; opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* === SCROLLBAR === */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 2px; }
+
+@media (min-width: 480px) {
+  .grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); }
+}
+@media (min-width: 768px) {
+  main { padding: 1.5rem 2rem; }
+  header { padding: 1rem 2rem 0; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <div class="logo">Media<span>Vault</span></div>
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Zoek film of serie..." autocomplete="off">
+      <div id="searchResults"></div>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-tab="watchlist">
+      👁 Watchlist <span class="badge" id="b-watchlist">0</span>
+    </button>
+    <button class="tab" data-tab="watching">
+      ▶ Bezig <span class="badge" id="b-watching">0</span>
+    </button>
+    <button class="tab" data-tab="done">
+      ✓ Klaar <span class="badge" id="b-done">0</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="grid" id="grid"></div>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal">
+    <div class="modal-title" id="modalTitle"></div>
+    <div id="modalContent"></div>
+    <button class="modal-close" id="modalClose">Sluiten</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────
+const APIKEY  = '1d00aa4fa593d0e9571a337dac87230ae';
+const IMGBASE = 'https://image.tmdb.org/t/p/w300';
+const STORE   = 'mediavault-v2';
+
+// ─── STATE ────────────────────────────────────────────────
+let db = load();
+let tab = 'watchlist';
+let srCache = [];
+let activeItem = null;
+let searchTimer = null;
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORE)) || { items: [] }; }
+  catch { return { items: [] }; }
+}
+function save() { localStorage.setItem(STORE, JSON.stringify(db)); }
+
+// ─── TOAST ────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ─── SEARCH ───────────────────────────────────────────────
+const inp = document.getElementById('searchInput');
+const srEl = document.getElementById('searchResults');
+
+inp.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = inp.value.trim();
+  if (q.length < 2) { srEl.style.display = 'none'; return; }
+  searchTimer = setTimeout(() => search(q), 380);
+});
+
+document.addEventListener('click', e => {
+  if (!inp.contains(e.target) && !srEl.contains(e.target)) srEl.style.display = 'none';
+});
+
+async function search(q) {
+  try {
+    const r = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${APIKEY}&query=${encodeURIComponent(q)}&language=nl-NL`);
+    const j = await r.json();
+    srCache = (j.results || []).filter(x => x.media_type === 'movie' || x.media_type === 'tv').slice(0, 9);
+    renderSR();
+  } catch { srEl.style.display = 'none'; }
+}
+
+function renderSR() {
+  if (!srCache.length) {
+    srEl.innerHTML = '<div class="sr-empty">Geen resultaten gevonden</div>';
+    srEl.style.display = 'block';
+    return;
+  }
+  srEl.innerHTML = srCache.map((r, i) => {
+    const title  = r.title || r.name || '?';
+    const year   = (r.release_date || r.first_air_date || '').slice(0, 4);
+    const type   = r.media_type === 'movie' ? '🎬 Film' : '📺 Serie';
+    const poster = r.poster_path ? `${IMGBASE}${r.poster_path}` : null;
+    const exists = db.items.some(x => x.id === r.id && x.type === r.media_type);
+    const img    = poster ? `<img src="${poster}" alt="" loading="lazy">` : '🎬';
+    return `
+      <div class="sr-item">
+        <div class="sr-poster">${img}</div>
+        <div class="sr-info">
+          <div class="sr-title">${title}</div>
+          <div class="sr-meta">${type}${year ? ' · ' + year : ''}</div>
+        </div>
+        <button class="sr-add" ${exists ? 'disabled' : ''} onclick="addItem(${i})">
+          ${exists ? '✓' : '+ Lijst'}
+        </button>
+      </div>`;
+  }).join('');
+  srEl.style.display = 'block';
+}
+
+function addItem(idx) {
+  const r = srCache[idx];
+  if (!r) return;
+  const item = {
+    id:       r.id,
+    type:     r.media_type,
+    title:    r.title || r.name || '?',
+    year:     (r.release_date || r.first_air_date || '').slice(0, 4),
+    poster:   r.poster_path || null,
+    status:   'watchlist',
+    addedAt:  Date.now(),
+    // TV tracking
+    totalSeasons: null,
+    totalEps:     {},   // { '1': 10, '2': 8, ... }
+    watchedEps:   {},   // { '1': [1,2,3], ... }
+  };
+
+  if (db.items.some(x => x.id === item.id && x.type === item.type)) {
+    toast('Staat al in je lijst!');
+    return;
+  }
+
+  db.items.unshift(item);
+  save();
+  renderGrid();
+  updateBadges();
+  toast(`"${item.title}" toegevoegd aan watchlist`);
+
+  if (item.type === 'tv') loadTVInfo(item.id);
+
+  srEl.style.display = 'none';
+  inp.value = '';
+}
+
+// ─── TV EPISODE DATA ──────────────────────────────────────
+async function loadTVInfo(id) {
+  try {
+    const r = await fetch(`https://api.themoviedb.org/3/tv/${id}?api_key=${APIKEY}&language=nl-NL`);
+    const j = await r.json();
+    const item = db.items.find(x => x.id === id && x.type === 'tv');
+    if (!item) return;
+
+    item.totalSeasons = j.number_of_seasons || 1;
+    item.totalEpsAll  = j.number_of_episodes || 0;
+    item.totalEps     = {};
+
+    (j.seasons || []).forEach(s => {
+      if (s.season_number > 0) item.totalEps[s.season_number] = s.episode_count;
+    });
+
+    save();
+    renderGrid();
+  } catch {}
+}
+
+// ─── TABS ─────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    tab = t.dataset.tab;
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+    renderGrid();
+  });
+});
+
+// ─── GRID ─────────────────────────────────────────────────
+function renderGrid() {
+  const grid   = document.getElementById('grid');
+  const items  = db.items.filter(x => x.status === tab);
+
+  updateBadges();
+
+  if (!items.length) {
+    const cfg = {
+      watchlist: ['🎬', 'Watchlist is leeg', 'Zoek een film of serie hierboven'],
+      watching:  ['▶️',  'Niks bezig',         'Verplaats iets van je watchlist'],
+      done:      ['✅', 'Nog niks afgerond', 'Gewoon doorijken joh'],
+    }[tab];
+    grid.innerHTML = `
+      <div class="empty">
+        <div class="empty-ico">${cfg[0]}</div>
+        <h3>${cfg[1]}</h3>
+        <p>${cfg[2]}</p>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = items.map(item => buildCard(item)).join('');
+}
+
+function buildCard(item) {
+  const poster = item.poster
+    ? `<img src="${IMGBASE}${item.poster}" alt="" loading="lazy">`
+    : `<div class="no-poster">🎬</div>`;
+
+  const typeB = item.type === 'movie'
+    ? `<span class="badge-type b-movie">Film</span>`
+    : `<span class="badge-type b-tv">Serie</span>`;
+
+  // Episode progress for TV
+  let prog = '';
+  if (item.type === 'tv' && item.totalEpsAll) {
+    const watched = Object.values(item.watchedEps).flat().length;
+    const total   = item.totalEpsAll;
+    const pct     = total ? Math.round((watched / total) * 100) : 0;
+    prog = `
+      <div class="prog-wrap">
+        <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+        <div class="prog-txt">${watched}/${total} eps · ${pct}%</div>
+      </div>`;
+  }
+
+  // Action buttons per status
+  let acts = '';
+  if (item.status === 'watchlist') {
+    acts = `
+      <div class="act-row">
+        <button class="act" onclick="mv(${item.id},'${item.type}','watching')">▶ Start</button>
+        <button class="act danger" onclick="rm(${item.id},'${item.type}')">✕</button>
+      </div>`;
+  } else if (item.status === 'watching') {
+    acts = `
+      <div class="act-row">
+        <button class="act" onclick="mv(${item.id},'${item.type}','done')">✓ Klaar</button>
+        <button class="act" onclick="mv(${item.id},'${item.type}','watchlist')">← Terug</button>
+        <button class="act danger" onclick="rm(${item.id},'${item.type}')">✕</button>
+      </div>`;
+  } else {
+    acts = `
+      <div class="act-row">
+        <button class="act" onclick="mv(${item.id},'${item.type}','watchlist')">↩ Herkijken</button>
+        <button class="act danger" onclick="rm(${item.id},'${item.type}')">✕</button>
+      </div>`;
+  }
+
+  const epsBtn = item.type === 'tv'
+    ? `<button class="act full eps" onclick="openEps(${item.id})">📺 Afleveringen bijhouden</button>`
+    : '';
+
+  return `
+    <div class="card">
+      <div class="card-img">${poster}</div>
+      <div class="card-body">
+        <div class="card-title">${item.title}</div>
+        <div class="card-meta">${typeB}${item.year ? ' · ' + item.year : ''}</div>
+        ${prog}
+        <div class="card-actions">
+          ${acts}
+          ${epsBtn}
+        </div>
+      </div>
+    </div>`;
+}
+
+function mv(id, type, status) {
+  const item = db.items.find(x => x.id === id && x.type === type);
+  if (!item) return;
+  item.status = status;
+  save();
+  renderGrid();
+  updateBadges();
+}
+
+function rm(id, type) {
+  db.items = db.items.filter(x => !(x.id === id && x.type === type));
+  save();
+  renderGrid();
+  updateBadges();
+  toast('Verwijderd');
+}
+
+// ─── BADGES ───────────────────────────────────────────────
+function updateBadges() {
+  ['watchlist','watching','done'].forEach(s => {
+    document.getElementById(`b-${s}`).textContent = db.items.filter(x => x.status === s).length;
+  });
+}
+
+// ─── EPISODE MODAL ────────────────────────────────────────
+const overlay  = document.getElementById('overlay');
+const modalEl  = document.getElementById('modal');
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+async function openEps(id) {
+  const item = db.items.find(x => x.id === id && x.type === 'tv');
+  if (!item) return;
+  activeItem = item;
+
+  document.getElementById('modalTitle').textContent = item.title;
+  document.getElementById('modalContent').innerHTML = '<p style="color:var(--dim);text-align:center;padding:1.5rem">Laden...</p>';
+  overlay.classList.add('open');
+
+  if (!item.totalSeasons) await loadTVInfo(id);
+  renderEpsModal();
+}
+
+function renderEpsModal() {
+  const item    = activeItem;
+  const seasons = Object.entries(item.totalEps || {});
+
+  if (!seasons.length) {
+    document.getElementById('modalContent').innerHTML = '<p style="color:var(--dim)">Geen seizoendata beschikbaar.</p>';
+    return;
+  }
+
+  document.getElementById('modalContent').innerHTML = seasons.map(([s, count]) => {
+    const sn      = parseInt(s);
+    const watched = item.watchedEps[s] || [];
+    const eps     = Array.from({ length: count }, (_, i) => i + 1);
+    const allDone = watched.length === count;
+
+    return `
+      <div class="season-block">
+        <div class="season-hdr">
+          <span>Seizoen ${sn} <small>${watched.length}/${count}</small></span>
+          <button class="mark-all" onclick="markAll(${sn},${count})">
+            ${allDone ? 'Alles uit' : 'Alles aan'}
+          </button>
+        </div>
+        <div class="ep-grid">
+          ${eps.map(ep => `
+            <button class="ep ${watched.includes(ep) ? 'done' : ''}"
+                    onclick="toggleEp(${sn},${ep})">${ep}</button>
+          `).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleEp(season, ep) {
+  const item = activeItem;
+  const key  = String(season);
+  if (!item.watchedEps[key]) item.watchedEps[key] = [];
+  const idx = item.watchedEps[key].indexOf(ep);
+  if (idx === -1) item.watchedEps[key].push(ep);
+  else item.watchedEps[key].splice(idx, 1);
+  save();
+  renderEpsModal();
+  renderGrid();
+}
+
+function markAll(season, count) {
+  const item = activeItem;
+  const key  = String(season);
+  const all  = Array.from({ length: count }, (_, i) => i + 1);
+  item.watchedEps[key] = (item.watchedEps[key]?.length === count) ? [] : all;
+  save();
+  renderEpsModal();
+  renderGrid();
+}
+
+function closeModal() {
+  overlay.classList.remove('open');
+  activeItem = null;
+}
+
+// ─── INIT ─────────────────────────────────────────────────
+renderGrid();
+updateBadges();
+
+// ─── SERVICE WORKER ───────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    const CACHE = 'mediavault-v1';
+    const ASSETS = ['./', './index.html'];
+    self.addEventListener('install', e => e.waitUntil(
+      caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+    ));
+    self.addEventListener('activate', e => e.waitUntil(
+      caches.keys().then(keys => Promise.all(
+        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
+      )).then(() => self.clients.claim())
+    ));
+    self.addEventListener('fetch', e => e.respondWith(
+      caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('./')))
+    ));
+  `;
+  const swBlob = new Blob([swCode], { type: 'application/javascript' });
+  const swUrl  = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl).catch(() => {});
+}
+</script>
+</body>
+</html>
