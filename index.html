@@ -619,4 +619,145 @@ function buildCard(item) {
       <div class="card-img">${poster}</div>
       <div class="card-body">
         <div class="card-title">${item.title}</div>
-        <div class="card-meta">${typeB}${item.year ? ' · ' + item.
+        <div class="card-meta">${typeB}${item.year ? ' · ' + item.year : ''}</div>
+        ${prog}
+        <div class="card-actions">
+          ${acts}
+          ${epsBtn}
+        </div>
+      </div>
+    </div>`;
+}
+
+function mv(id, type, status) {
+  const item = db.items.find(x => x.id === id && x.type === type);
+  if (!item) return;
+  item.status = status;
+  save();
+  renderGrid();
+  updateBadges();
+}
+
+function rm(id, type) {
+  db.items = db.items.filter(x => !(x.id === id && x.type === type));
+  save();
+  renderGrid();
+  updateBadges();
+  toast('Verwijderd');
+}
+
+// ─── BADGES ───────────────────────────────────────────────
+function updateBadges() {
+  ['watchlist','watching','done'].forEach(s => {
+    document.getElementById(`b-${s}`).textContent = db.items.filter(x => x.status === s).length;
+  });
+}
+
+// ─── EPISODE MODAL ────────────────────────────────────────
+const overlay  = document.getElementById('overlay');
+const modalEl  = document.getElementById('modal');
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+async function openEps(id) {
+  const item = db.items.find(x => x.id === id && x.type === 'tv');
+  if (!item) return;
+  activeItem = item;
+
+  document.getElementById('modalTitle').textContent = item.title;
+  document.getElementById('modalContent').innerHTML = '<p style="color:var(--dim);text-align:center;padding:1.5rem">Laden...</p>';
+  overlay.classList.add('open');
+
+  if (!item.totalSeasons) await loadTVInfo(id);
+  renderEpsModal();
+}
+
+function renderEpsModal() {
+  const item    = activeItem;
+  const seasons = Object.entries(item.totalEps || {});
+
+  if (!seasons.length) {
+    document.getElementById('modalContent').innerHTML = '<p style="color:var(--dim)">Geen seizoendata beschikbaar.</p>';
+    return;
+  }
+
+  document.getElementById('modalContent').innerHTML = seasons.map(([s, count]) => {
+    const sn      = parseInt(s);
+    const watched = item.watchedEps[s] || [];
+    const eps     = Array.from({ length: count }, (_, i) => i + 1);
+    const allDone = watched.length === count;
+
+    return `
+      <div class="season-block">
+        <div class="season-hdr">
+          <span>Seizoen ${sn} <small>${watched.length}/${count}</small></span>
+          <button class="mark-all" onclick="markAll(${sn},${count})">
+            ${allDone ? 'Alles uit' : 'Alles aan'}
+          </button>
+        </div>
+        <div class="ep-grid">
+          ${eps.map(ep => `
+            <button class="ep ${watched.includes(ep) ? 'done' : ''}"
+                    onclick="toggleEp(${sn},${ep})">${ep}</button>
+          `).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleEp(season, ep) {
+  const item = activeItem;
+  const key  = String(season);
+  if (!item.watchedEps[key]) item.watchedEps[key] = [];
+  const idx = item.watchedEps[key].indexOf(ep);
+  if (idx === -1) item.watchedEps[key].push(ep);
+  else item.watchedEps[key].splice(idx, 1);
+  save();
+  renderEpsModal();
+  renderGrid();
+}
+
+function markAll(season, count) {
+  const item = activeItem;
+  const key  = String(season);
+  const all  = Array.from({ length: count }, (_, i) => i + 1);
+  item.watchedEps[key] = (item.watchedEps[key]?.length === count) ? [] : all;
+  save();
+  renderEpsModal();
+  renderGrid();
+}
+
+function closeModal() {
+  overlay.classList.remove('open');
+  activeItem = null;
+}
+
+// ─── INIT ─────────────────────────────────────────────────
+renderGrid();
+updateBadges();
+
+// ─── SERVICE WORKER ───────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    const CACHE = 'mediavault-v1';
+    const ASSETS = ['./', './index.html'];
+    self.addEventListener('install', e => e.waitUntil(
+      caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+    ));
+    self.addEventListener('activate', e => e.waitUntil(
+      caches.keys().then(keys => Promise.all(
+        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
+      )).then(() => self.clients.claim())
+    ));
+    self.addEventListener('fetch', e => e.respondWith(
+      caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('./')))
+    ));
+  `;
+  const swBlob = new Blob([swCode], { type: 'application/javascript' });
+  const swUrl  = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl).catch(() => {});
+}
+</script>
+</body>
+</html>
